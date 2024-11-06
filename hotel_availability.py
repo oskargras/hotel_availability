@@ -1,84 +1,82 @@
 import json
-from datetime import datetime
+from collections import defaultdict
 
-# Helper function to parse date string into a datetime object
-def parse_date(date_str):
-    return datetime.strptime(date_str, "%Y%m%d")
-
-# Helper function to check if a date is within a range
-def is_date_in_range(date, start_date, end_date):
-    return start_date <= date <= end_date
-
-# Load hotel and booking data from the JSON files
-def load_data(hotels_file, bookings_file):
-    with open(hotels_file, 'r') as f:
-        hotels = json.load(f)
-    
-    with open(bookings_file, 'r') as f:
-        bookings = json.load(f)
-    
+# Load data from JSON files
+def load_data():
+    with open('hotels.json', 'r') as hotel_file, open('bookings.json', 'r') as booking_file:
+        hotels = json.load(hotel_file)
+        bookings = json.load(booking_file)
     return hotels, bookings
 
-# Check availability based on hotel, date range, and room type
-def check_availability(hotels, bookings, hotel_id, date_range, room_type):
-    # Split the date range if it's a multi-day range
-    date_range_split = date_range.split('-')
-    start_date = parse_date(date_range_split[0])
-    end_date = parse_date(date_range_split[1]) if len(date_range_split) > 1 else start_date
+# Parse hotel data into a more usable format
+def parse_hotels(hotels):
+    hotel_dict = {}
+    for hotel in hotels:
+        hotel_dict[hotel['id']] = {
+            'name': hotel['name'],
+            'roomTypes': {room['code']: room for room in hotel['roomTypes']},
+            'rooms': defaultdict(int)  # Default dict to count room types
+        }
+        for room in hotel['rooms']:
+            hotel_dict[hotel['id']]['rooms'][room['roomType']] += 1
+    return hotel_dict
 
-    # Find the hotel in the list of hotels
-    hotel = next((h for h in hotels if h['id'] == hotel_id), None)
-    if not hotel:
-        print(f"Hotel {hotel_id} not found!")
-        return
-
-    # Find the room types and the rooms available in the hotel
-    available_rooms = [r for r in hotel['rooms'] if r['roomType'] == room_type]
-    if not available_rooms:
-        print(f"No rooms of type {room_type} available in {hotel['name']}.")
-        return
-
-    # Count rooms and consider bookings
-    room_count = len(available_rooms)
-    bookings_count = 0
+# Parse bookings into a usable format
+def parse_bookings(bookings):
+    booking_dict = defaultdict(list)
     for booking in bookings:
-        if booking['hotelId'] == hotel_id and booking['roomType'] == room_type:
-            booking_start_date = parse_date(booking['arrival'])
-            booking_end_date = parse_date(booking['departure'])
+        booking_dict[booking['hotelId']].append(booking)
+    return booking_dict
 
-            # Check if the booking overlaps with the requested date range
-            if is_date_in_range(booking_start_date, start_date, end_date) or is_date_in_range(booking_end_date, start_date, end_date):
-                bookings_count += 1
+# Calculate room availability
+def calculate_availability(hotel_dict, booking_dict, hotel_id, query_date, room_type):
+    available_rooms = hotel_dict[hotel_id]['rooms'].get(room_type, 0)
     
-    # Consider overbookings (negative bookings)
-    available_rooms_after_booking = room_count - bookings_count
-    print(f"Availability for hotel {hotel_id}, room type {room_type}, date range {date_range}: {available_rooms_after_booking}")
+    # Subtract the number of bookings that overlap with the query date
+    for booking in booking_dict.get(hotel_id, []):
+        if booking['roomType'] == room_type:
+            if (query_date >= booking['arrival'] and query_date < booking['departure']):
+                available_rooms -= 1
+
+    return available_rooms
+
+# Display availability in the required format
+def check_availability(hotel_dict, booking_dict):
+    while True:
+        query = input("Enter availability query (Format: Availability(H1, 20240901, SGL), blank to exit): ")
+        if not query.strip():
+            break
+        try:
+            # Extract the parameters from the query string
+            query = query.strip().replace('Availability(', '').replace(')', '')
+            hotel_id, query_date, room_type = query.split(',')
+            hotel_id = hotel_id.strip()
+            query_date = query_date.strip()
+            room_type = room_type.strip()
+            
+            # Ensure that the hotel and room type exist
+            if hotel_id in hotel_dict and room_type in hotel_dict[hotel_id]['roomTypes']:
+                available_rooms = calculate_availability(hotel_dict, booking_dict, hotel_id, query_date, room_type)
+                print(f"Availability({hotel_id}, {query_date}, {room_type}) = {available_rooms}")
+            else:
+                print("Invalid hotel or room type.")
+        except Exception as e:
+            print(f"Error processing the query: {e}")
 
 def main():
-    # Get file paths from user or command line
-    hotels_file = input("Enter path to hotels JSON file: ")
-    bookings_file = input("Enter path to bookings JSON file: ")
-
-    # Load hotel and booking data
-    hotels, bookings = load_data(hotels_file, bookings_file)
-
-    while True:
-        user_input = input("Enter availability query or blank to exit: ").strip()
-        
-        if not user_input:
-            break  # Exit on blank input
-        
-        # Parse the query in the format Availability(H1,20240901, SGL)
-        if user_input.startswith("Availability(") and user_input.endswith(")"):
-            query = user_input[len("Availability("):-1]
-            parts = query.split(",")
-            if len(parts) == 3:
-                hotel_id = parts[0].strip()
-                date_range = parts[1].strip()
-                room_type = parts[2].strip()
-                check_availability(hotels, bookings, hotel_id, date_range, room_type)
-            else:
-                print("Invalid query format. Use Availability(H1,20240901, SGL)")
+    # Load the hotel and booking data
+    hotels, bookings = load_data()
+    
+    # Parse the data into usable dictionaries
+    hotel_dict = parse_hotels(hotels)
+    booking_dict = parse_bookings(bookings)
+    
+    print("Hotel Room Availability System")
+    print("Type the availability query in the format: Availability(H1, 20240901, SGL)")
+    print("Leave blank and press Enter to exit the program.")
+    
+    # Start checking availability
+    check_availability(hotel_dict, booking_dict)
 
 if __name__ == "__main__":
     main()
