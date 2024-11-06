@@ -5,20 +5,20 @@ How to Run the Application
 1. Prepare Your Environment:
 Make sure you have Python 3.x installed on your machine. You can download it from python.org.
 
-2. Create the Project Directory
+2. Create the Project Directory:
 Create a directory for the project, and add the following files:
 
 hotels.json
 bookings.json
 hotel_availability.py
 
-3. Running the Program
+3. Running the Program:
 Open a terminal or command prompt.
 Navigate to the project directory.
 Run the program by executing the following command:
 python hotel_availability.py
 
-4. Example Queries
+4. Example Queries:
 Once the program starts, you can enter availability queries like these:
 
 Availability(H1, 20240901, SGL)
